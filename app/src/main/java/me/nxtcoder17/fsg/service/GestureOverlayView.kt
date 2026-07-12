@@ -32,6 +32,7 @@ class GestureOverlayView(
     var gestureSensitivityDp: Int = 40
     var hapticsEnabled: Boolean = true
     var visualFeedbackEnabled: Boolean = true
+    var isTouchableAllowed: Boolean = true
 
     private val density = resources.displayMetrics.density
     private var startX = 0f
@@ -39,7 +40,7 @@ class GestureOverlayView(
     private var currentTouchX = 0f
     private var currentTouchY = 0f
     private var dragDistance = 0f
-    private var isGestureActive = false
+    var isGestureActive = false
     private var isThresholdCrossed = false
     private var isHoldTriggered = false
 
@@ -67,6 +68,7 @@ class GestureOverlayView(
         isHoldTriggered = false
         animateThresholdState(false)
         animateHoldState(false)
+        (context as? GestureAccessibilityService)?.checkAndApplyOverlaysLifecycle()
     }
 
     private fun releaseTouchGrab() {
@@ -101,7 +103,7 @@ class GestureOverlayView(
         style = Paint.Style.FILL
     }
 
-    private val activeColor = Color.parseColor("#B06650A4") // Theme purple
+    var activeColor = Color.parseColor("#B06650A4") // Theme purple
     private val inactiveColor = Color.parseColor("#601A1A1A") // Transparent dark
 
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
@@ -189,6 +191,13 @@ class GestureOverlayView(
         }
     }
 
+    fun setTouchable(touchable: Boolean) {
+        isTouchableAllowed = touchable
+        if (!isGestureActive) {
+            shrinkLayout(makeTouchable = touchable)
+        }
+    }
+
     private fun expandLayout() {
         if (edge == Edge.BOTTOM) return // Never expand bottom overlay! Keep it thin.
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -230,7 +239,8 @@ class GestureOverlayView(
         var targetFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                           WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                           WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        if (!makeTouchable) {
+        val finalTouchable = makeTouchable && isTouchableAllowed
+        if (!finalTouchable) {
             targetFlags = targetFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
         params.flags = targetFlags
@@ -356,6 +366,7 @@ class GestureOverlayView(
                 holdHandler.removeCallbacks(makeTouchableRunnable)
                 holdHandler.removeCallbacks(safetyShrinkRunnable)
                 shrinkLayout(makeTouchable = true)
+                (context as? GestureAccessibilityService)?.checkAndApplyOverlaysLifecycle()
                 invalidate()
                 return true
             }
@@ -371,7 +382,7 @@ class GestureOverlayView(
             when (edge) {
                 Edge.LEFT -> drawLeftBulge(canvas)
                 Edge.RIGHT -> drawRightBulge(canvas)
-                Edge.BOTTOM -> {}
+                Edge.BOTTOM -> drawBottomPill(canvas)
             }
         }
     }
@@ -466,57 +477,39 @@ class GestureOverlayView(
         }
     }
 
-    private fun drawBottomBar(canvas: Canvas) {
-        val screenWidth = width.toFloat()
-        val screenHeight = height.toFloat()
-        val barHeight = 4f * density
-        val baseMargin = 12f * density
+    private fun drawBottomPill(canvas: Canvas) {
+        val thresholdPx = gestureSensitivityDp * density
+        val progress = (dragDistance / thresholdPx).coerceIn(0f, 1f)
 
-        val barY = (screenHeight - baseMargin - dragDistance * 0.6f).coerceAtLeast(60f * density)
-        
-        // Draw elegant glowing radial gradient behind the home indicator when holding for recents
-        if (holdProgress > 0.05f) {
-            val glowRadius = (60f + 40f * holdProgress) * density
-            val glowColorStart = interpolateColor(Color.TRANSPARENT, activeColor, holdProgress * 0.5f)
-            glowPaint.shader = RadialGradient(
-                screenWidth / 2f, barY - barHeight / 2f,
-                glowRadius,
-                glowColorStart, Color.TRANSPARENT,
-                Shader.TileMode.CLAMP
-            )
-            canvas.drawCircle(screenWidth / 2f, barY - barHeight / 2f, glowRadius, glowPaint)
+        // Pill width starts at 70dp, expands to 100dp as you drag
+        val baseWidth = 70f * density
+        val currentWidth = baseWidth + (progress * 30f * density)
+
+        // Pill height starts at 3dp, grows to 4dp
+        val pillHeight = (3f + progress * 1f) * density
+
+        val centerX = width / 2f
+        val left = centerX - currentWidth / 2f
+        val right = centerX + currentWidth / 2f
+
+        // Rises up from the bottom of the 15dp overlay
+        val maxRise = 8f * density
+        val bottomY = height.toFloat() - 2f * density
+        val top = bottomY - pillHeight - (progress * maxRise)
+        val bottom = bottomY - (progress * maxRise)
+
+        // Gradient color based on selected active color
+        paint.color = interpolateColor(inactiveColor, activeColor, progress)
+
+        val rect = RectF(left, top, right, bottom)
+        canvas.drawRoundRect(rect, pillHeight / 2f, pillHeight / 2f, paint)
+
+        // Draw soft breathing glow once swiped past 50% threshold
+        if (progress > 0.5f) {
+            glowPaint.color = activeColor
+            glowPaint.alpha = ((progress - 0.5f) * 2f * 80).toInt() // Max alpha 80
+            val glowRect = RectF(left - 6f * density, top - 3f * density, right + 6f * density, bottom + 3f * density)
+            canvas.drawRoundRect(glowRect, (pillHeight + 6f * density) / 2f, (pillHeight + 6f * density) / 2f, glowPaint)
         }
-
-        val pillColor = interpolateColor(Color.WHITE, activeColor, holdProgress)
-        val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = pillColor
-            style = Paint.Style.FILL
-        }
-
-        // Pill widens smoothly when Recents transitions are holding
-        val currentBarWidth = (130f + 40f * holdProgress) * density
-        val left = screenWidth / 2f - currentBarWidth / 2f
-        val right = screenWidth / 2f + currentBarWidth / 2f
-        val top = barY - barHeight
-        val bottom = barY
-
-        canvas.drawRoundRect(left, top, right, bottom, barHeight / 2f, barHeight / 2f, barPaint)
-    }
-
-    private fun drawIdleBottomBar(canvas: Canvas) {
-        val screenWidth = width.toFloat()
-        val barWidth = 130f * density
-        val barHeight = 4f * density
-        
-        val top = (height - barHeight) / 2f
-        val bottom = top + barHeight
-        val left = screenWidth / 2f - barWidth / 2f
-        val right = screenWidth / 2f + barWidth / 2f
-
-        val idleBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#66888888")
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(left, top, right, bottom, barHeight / 2f, barHeight / 2f, idleBarPaint)
     }
 }

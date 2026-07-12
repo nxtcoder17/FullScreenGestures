@@ -2,9 +2,12 @@ package me.nxtcoder17.fsg.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -24,6 +27,10 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
     private var bottomOverlay: GestureOverlayView? = null
 
     private lateinit var prefs: SharedPreferences
+    private var isOverlaysTouchable = true
+    private var launcherPackages = emptySet<String>()
+    private var overlaysAdded = false
+    private var currentPackageName: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -32,6 +39,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
         prefs = getSharedPreferences("fsg_settings", Context.MODE_PRIVATE)
         prefs.registerOnSharedPreferenceChangeListener(this)
 
+        launcherPackages = getLauncherPackages()
         updateOverlays()
     }
 
@@ -40,7 +48,12 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Not needed for gesture capture
+        if (event == null) return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val packageName = event.packageName?.toString() ?: return
+            currentPackageName = packageName
+            checkAndApplyOverlaysLifecycle()
+        }
     }
 
     override fun onDestroy() {
@@ -64,6 +77,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
     }
 
     private fun addOverlays() {
+        if (overlaysAdded) return
         val wm = windowManager ?: return
 
         val leftEnabled = prefs.getBoolean("left_edge_enabled", true)
@@ -80,6 +94,9 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
 
         val density = resources.displayMetrics.density
 
+        val defaultColor = android.graphics.Color.parseColor("#B06650A4")
+        val gestureColor = prefs.getInt("gesture_color", defaultColor)
+
         if (leftEnabled) {
             val view = GestureOverlayView(this, GestureOverlayView.Edge.LEFT) { action ->
                 performGlobalAction(action)
@@ -88,6 +105,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
             view.hapticsEnabled = haptics
             view.visualFeedbackEnabled = visualFeedback
             view.thicknessPx = (leftThickness * density).toInt()
+            view.activeColor = gestureColor
 
             val params = WindowManager.LayoutParams().apply {
                 type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -118,6 +136,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
             view.hapticsEnabled = haptics
             view.visualFeedbackEnabled = visualFeedback
             view.thicknessPx = (rightThickness * density).toInt()
+            view.activeColor = gestureColor
 
             val params = WindowManager.LayoutParams().apply {
                 type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -148,6 +167,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
             view.hapticsEnabled = haptics
             view.visualFeedbackEnabled = visualFeedback
             view.thicknessPx = (bottomThickness * density).toInt()
+            view.activeColor = gestureColor
 
             val params = WindowManager.LayoutParams().apply {
                 type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -169,9 +189,11 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
                 e.printStackTrace()
             }
         }
+        overlaysAdded = true
     }
 
     private fun removeOverlays() {
+        if (!overlaysAdded) return
         val wm = windowManager ?: return
         
         leftOverlay?.let {
@@ -191,7 +213,6 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
             }
             rightOverlay = null
         }
-        
         bottomOverlay?.let {
             try {
                 wm.removeView(it)
@@ -200,11 +221,48 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
             }
             bottomOverlay = null
         }
+        overlaysAdded = false
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         Handler(Looper.getMainLooper()).post {
             updateOverlays()
         }
+    }
+
+    private fun getLauncherPackages(): Set<String> {
+        val packages = mutableSetOf("com.android.systemui", "com.huawei.android.launcher", "com.huawei.launcher")
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.queryIntentActivities(intent, 0)
+        }
+        for (info in resolveInfos) {
+            info.activityInfo.packageName?.let { packages.add(it) }
+        }
+        return packages
+    }
+
+    fun checkAndApplyOverlaysLifecycle() {
+        val packageName = currentPackageName ?: return
+        val isSystemOrLauncher = launcherPackages.contains(packageName)
+        if (isSystemOrLauncher) {
+            // Defer physical removal if the user is still swiping/touching the screen
+            if (!isAnyGestureActive()) {
+                removeOverlays()
+            }
+        } else {
+            addOverlays()
+        }
+    }
+
+    private fun isAnyGestureActive(): Boolean {
+        return leftOverlay?.isGestureActive == true ||
+               rightOverlay?.isGestureActive == true ||
+               bottomOverlay?.isGestureActive == true
     }
 }

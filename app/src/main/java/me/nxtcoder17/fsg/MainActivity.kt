@@ -11,8 +11,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -115,12 +117,15 @@ fun FullScreenGesturesApp(
     var hapticsEnabled by rememberPreferenceState("haptics_enabled", true)
     var visualFeedbackEnabled by rememberPreferenceState("visual_feedback_enabled", true)
 
+    val defaultColorInt = remember { android.graphics.Color.parseColor("#B06650A4") }
+    var gestureColorInt by rememberIntPreferenceState("gesture_color", defaultColorInt)
+
     val scrollState = rememberScrollState()
 
     // Premium Color Palette
     val darkSlate = Color(0xFF0F172A)
     val cardBackground = Color(0xFF1E293B)
-    val accentPurple = Color(0xFF8B5CF6)
+    val accentPurple = Color(gestureColorInt)
     val accentTeal = Color(0xFF10B981)
     val accentRed = Color(0xFFF43F5E)
     val textPrimary = Color(0xFFF8FAFC)
@@ -182,7 +187,17 @@ fun FullScreenGesturesApp(
                 bottomEnabled = bottomEnabled,
                 cardBackground = cardBackground,
                 textPrimary = textPrimary,
-                textSecondary = textSecondary
+                textSecondary = textSecondary,
+                gestureColor = accentPurple
+            )
+
+            // Gesture Color Accent Selector Card
+            ColorCustomizationCard(
+                cardBackground = cardBackground,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                selectedColorInt = gestureColorInt,
+                onColorSelected = { gestureColorInt = it }
             )
 
             // Settings Controls
@@ -357,7 +372,8 @@ fun PreviewSection(
     bottomEnabled: Boolean,
     cardBackground: Color,
     textPrimary: Color,
-    textSecondary: Color
+    textSecondary: Color,
+    gestureColor: Color
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = cardBackground),
@@ -423,8 +439,8 @@ fun PreviewSection(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF8B5CF6).copy(alpha = 0.2f))
-                                    .border(1.dp, Color(0xFF8B5CF6), RoundedCornerShape(8.dp)),
+                                    .background(gestureColor.copy(alpha = 0.2f))
+                                    .border(1.dp, gestureColor, RoundedCornerShape(8.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text("✨", color = Color.White, fontSize = 16.sp)
@@ -443,7 +459,7 @@ fun PreviewSection(
                                 .fillMaxHeight()
                                 .width((leftThickness * 0.75f).dp) // Scale down for preview display
                                 .align(Alignment.CenterStart)
-                                .background(Color(0xFF8B5CF6).copy(alpha = 0.4f))
+                                .background(gestureColor.copy(alpha = 0.4f))
                         )
                     }
 
@@ -454,7 +470,7 @@ fun PreviewSection(
                                 .fillMaxHeight()
                                 .width((rightThickness * 0.75f).dp)
                                 .align(Alignment.CenterEnd)
-                                .background(Color(0xFF8B5CF6).copy(alpha = 0.4f))
+                                .background(gestureColor.copy(alpha = 0.4f))
                         )
                     }
 
@@ -465,7 +481,7 @@ fun PreviewSection(
                                 .fillMaxWidth()
                                 .height((bottomThickness * 0.75f).dp)
                                 .align(Alignment.BottomCenter)
-                                .background(Color(0xFF8B5CF6).copy(alpha = 0.4f))
+                                .background(gestureColor.copy(alpha = 0.4f))
                         )
                     }
                 }
@@ -680,6 +696,83 @@ fun EdgeControlItem(
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+@Composable
+fun ColorCustomizationCard(
+    cardBackground: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    selectedColorInt: Int,
+    onColorSelected: (Int) -> Unit
+) {
+    val presets = remember {
+        listOf(
+            "#B06650A4", // Classic Purple
+            "#B03B82F6", // Indigo Blue
+            "#B006B6D4", // Electric Cyan
+            "#B010B981", // Glowing Teal
+            "#B0F59E0B", // Amber Orange
+            "#B0EF4444", // Crimson Red
+            "#B0EC4899"  // Hot Pink
+        ).map { android.graphics.Color.parseColor(it) }
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = cardBackground),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "🎨 Active Edge Color Accent",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary
+            )
+            
+            Text(
+                text = "Choose the accent color displayed during the edge swipe animations.",
+                fontSize = 12.sp,
+                color = textSecondary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                presets.forEach { colorInt ->
+                    val isSelected = colorInt == selectedColorInt
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(colorInt))
+                            .border(
+                                width = if (isSelected) 3.dp else 1.dp,
+                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
+                                shape = CircleShape
+                            )
+                            .clickable { onColorSelected(colorInt) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Text(
+                                text = "✓",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
