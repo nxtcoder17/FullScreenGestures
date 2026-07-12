@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Full Screen Gestures</string>
+    <string name="accessibility_service_description">Provides full screen navigation gestures (Back, Home, and Recents) for custom launchers on HarmonyOS and Android devices.</string>
+    <string name="accessibility_service_label">Full Screen Gestures Service</string>
+</resources>
