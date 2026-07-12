@@ -59,6 +59,16 @@ class GestureOverlayView(
         shrinkLayout(makeTouchable = true)
     }
 
+    private val safetyShrinkRunnable = Runnable {
+        shrinkLayout(makeTouchable = true)
+        isGestureActive = false
+        dragDistance = 0f
+        isThresholdCrossed = false
+        isHoldTriggered = false
+        animateThresholdState(false)
+        animateHoldState(false)
+    }
+
     private fun releaseTouchGrab() {
         shrinkLayout(makeTouchable = false)
         holdHandler.removeCallbacks(makeTouchableRunnable)
@@ -194,12 +204,19 @@ class GestureOverlayView(
                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         try {
             wm.updateViewLayout(this, params)
+            
+            // Safety timeout: shrink the layout if ACTION_UP or CANCEL is lost
+            holdHandler.removeCallbacks(safetyShrinkRunnable)
+            holdHandler.postDelayed(safetyShrinkRunnable, 800) // 800ms limit
         } catch (e: Exception) {
             // Ignore
         }
     }
 
     private fun shrinkLayout(makeTouchable: Boolean = true) {
+        // Cancel safety timeout since we are shrinking normally
+        holdHandler.removeCallbacks(safetyShrinkRunnable)
+        
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val params = windowLayoutParams ?: return
         when (edge) {
@@ -337,6 +354,7 @@ class GestureOverlayView(
                 animateHoldState(false)
 
                 holdHandler.removeCallbacks(makeTouchableRunnable)
+                holdHandler.removeCallbacks(safetyShrinkRunnable)
                 shrinkLayout(makeTouchable = true)
                 invalidate()
                 return true
