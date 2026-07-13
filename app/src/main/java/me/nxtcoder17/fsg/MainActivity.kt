@@ -120,6 +120,7 @@ fun FullScreenGesturesApp(
     var sensitivity by rememberIntPreferenceState("gesture_sensitivity", 40)
     var hapticsEnabled by rememberPreferenceState("haptics_enabled", true)
     var visualFeedbackEnabled by rememberPreferenceState("visual_feedback_enabled", true)
+    var sideEdgeHeight by rememberIntPreferenceState("side_edge_height", 70)
 
     val defaultColorInt = remember { android.graphics.Color.parseColor("#B06650A4") }
     var gestureColorInt by rememberIntPreferenceState("gesture_color", defaultColorInt)
@@ -224,6 +225,8 @@ fun FullScreenGesturesApp(
                 onHapticsChange = { hapticsEnabled = it },
                 visualFeedbackEnabled = visualFeedbackEnabled,
                 onVisualFeedbackChange = { visualFeedbackEnabled = it },
+                sideEdgeHeight = sideEdgeHeight,
+                onSideEdgeHeightChange = { sideEdgeHeight = it },
                 cardBackground = cardBackground,
                 accentPurple = accentPurple,
                 textPrimary = textPrimary,
@@ -514,6 +517,8 @@ fun SettingsSection(
     onHapticsChange: (Boolean) -> Unit,
     visualFeedbackEnabled: Boolean,
     onVisualFeedbackChange: (Boolean) -> Unit,
+    sideEdgeHeight: Int,
+    onSideEdgeHeightChange: (Int) -> Unit,
     cardBackground: Color,
     accentPurple: Color,
     textPrimary: Color,
@@ -594,6 +599,33 @@ fun SettingsSection(
                     value = sensitivity.toFloat(),
                     onValueChange = { onSensitivityChange(it.toInt()) },
                     valueRange = 20f..80f,
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = accentPurple,
+                        thumbColor = accentPurple
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            HorizontalDivider(color = textSecondary.copy(alpha = 0.1f))
+
+            // Edge Height Control
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Side Gesture Height", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text("Avoid keyboard conflicts by shrinking edges", color = textSecondary, fontSize = 11.sp)
+                    }
+                    Text("${sideEdgeHeight}%", color = accentPurple, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                Slider(
+                    value = sideEdgeHeight.toFloat(),
+                    onValueChange = { onSideEdgeHeightChange(it.toInt()) },
+                    valueRange = 30f..100f,
                     colors = SliderDefaults.colors(
                         activeTrackColor = accentPurple,
                         thumbColor = accentPurple

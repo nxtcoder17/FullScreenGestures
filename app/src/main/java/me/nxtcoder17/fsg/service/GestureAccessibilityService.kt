@@ -84,6 +84,9 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
         val defaultColor = android.graphics.Color.parseColor("#B06650A4")
         val gestureColor = prefs.getInt("gesture_color", defaultColor)
 
+        val edgeHeightPercent = prefs.getInt("side_edge_height", 70)
+        val edgeHeight = (resources.displayMetrics.heightPixels * (edgeHeightPercent / 100f)).toInt()
+
         if (leftEnabled) {
             val view = GestureOverlayView(this, GestureOverlayView.Edge.LEFT) { action ->
                 performGlobalAction(action)
@@ -102,7 +105,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                 gravity = Gravity.LEFT or Gravity.TOP
                 width = view.thicknessPx
-                height = WindowManager.LayoutParams.MATCH_PARENT
+                height = edgeHeight
                 x = 0
                 y = 0
             }
@@ -133,7 +136,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                 gravity = Gravity.RIGHT or Gravity.TOP
                 width = view.thicknessPx
-                height = WindowManager.LayoutParams.MATCH_PARENT
+                height = edgeHeight
                 x = 0
                 y = 0
             }
