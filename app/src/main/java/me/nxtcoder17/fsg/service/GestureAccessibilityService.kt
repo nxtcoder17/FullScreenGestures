@@ -2,12 +2,9 @@ package me.nxtcoder17.fsg.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -27,10 +24,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
     private var bottomOverlay: GestureOverlayView? = null
 
     private lateinit var prefs: SharedPreferences
-    private var isOverlaysTouchable = true
-    private var launcherPackages = emptySet<String>()
     private var overlaysAdded = false
-    private var currentPackageName: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -38,8 +32,6 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         prefs = getSharedPreferences("fsg_settings", Context.MODE_PRIVATE)
         prefs.registerOnSharedPreferenceChangeListener(this)
-
-        launcherPackages = getLauncherPackages()
         updateOverlays()
     }
 
@@ -48,12 +40,7 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val packageName = event.packageName?.toString() ?: return
-            currentPackageName = packageName
-            checkAndApplyOverlaysLifecycle()
-        }
+        // Required abstract method but not used for gesture operations
     }
 
     override fun onDestroy() {
@@ -230,39 +217,4 @@ class GestureAccessibilityService : AccessibilityService(), SharedPreferences.On
         }
     }
 
-    private fun getLauncherPackages(): Set<String> {
-        val packages = mutableSetOf("com.android.systemui", "com.huawei.android.launcher", "com.huawei.launcher")
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-        }
-        val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
-        } else {
-            @Suppress("DEPRECATION")
-            packageManager.queryIntentActivities(intent, 0)
-        }
-        for (info in resolveInfos) {
-            info.activityInfo.packageName?.let { packages.add(it) }
-        }
-        return packages
-    }
-
-    fun checkAndApplyOverlaysLifecycle() {
-        val packageName = currentPackageName ?: return
-        val isSystemOrLauncher = launcherPackages.contains(packageName)
-        if (isSystemOrLauncher) {
-            // Defer physical removal if the user is still swiping/touching the screen
-            if (!isAnyGestureActive()) {
-                removeOverlays()
-            }
-        } else {
-            addOverlays()
-        }
-    }
-
-    private fun isAnyGestureActive(): Boolean {
-        return leftOverlay?.isGestureActive == true ||
-               rightOverlay?.isGestureActive == true ||
-               bottomOverlay?.isGestureActive == true
-    }
 }

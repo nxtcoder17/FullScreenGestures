@@ -32,7 +32,6 @@ class GestureOverlayView(
     var gestureSensitivityDp: Int = 40
     var hapticsEnabled: Boolean = true
     var visualFeedbackEnabled: Boolean = true
-    var isTouchableAllowed: Boolean = true
 
     private val density = resources.displayMetrics.density
     private var startX = 0f
@@ -68,7 +67,6 @@ class GestureOverlayView(
         isHoldTriggered = false
         animateThresholdState(false)
         animateHoldState(false)
-        (context as? GestureAccessibilityService)?.checkAndApplyOverlaysLifecycle()
     }
 
     private fun releaseTouchGrab() {
@@ -191,12 +189,7 @@ class GestureOverlayView(
         }
     }
 
-    fun setTouchable(touchable: Boolean) {
-        isTouchableAllowed = touchable
-        if (!isGestureActive) {
-            shrinkLayout(makeTouchable = touchable)
-        }
-    }
+
 
     private fun expandLayout() {
         if (edge == Edge.BOTTOM) return // Never expand bottom overlay! Keep it thin.
@@ -239,7 +232,7 @@ class GestureOverlayView(
         var targetFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                           WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                           WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        val finalTouchable = makeTouchable && isTouchableAllowed
+        val finalTouchable = makeTouchable
         if (!finalTouchable) {
             targetFlags = targetFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
@@ -366,7 +359,6 @@ class GestureOverlayView(
                 holdHandler.removeCallbacks(makeTouchableRunnable)
                 holdHandler.removeCallbacks(safetyShrinkRunnable)
                 shrinkLayout(makeTouchable = true)
-                (context as? GestureAccessibilityService)?.checkAndApplyOverlaysLifecycle()
                 invalidate()
                 return true
             }

@@ -21,9 +21,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -158,7 +162,7 @@ fun FullScreenGesturesApp(
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "HarmonyOS Edge Navigation Enabler",
+                    text = "Edge Navigation Enabler",
                     fontSize = 14.sp,
                     color = textSecondary,
                     textAlign = TextAlign.Center,
@@ -245,7 +249,7 @@ fun FullScreenGesturesApp(
                         fontSize = 14.sp
                     )
                     Text(
-                        text = "Due to restrictions in HarmonyOS, system full-screen gestures are disabled when using a custom launcher. This app runs an Accessibility Service that overlays invisible touch areas on the screen edges to capture gestures (Back, Home, Recents) and execute them seamlessly.",
+                        text = "Due to system limitations, full-screen gestures are often disabled when using a custom launcher. This app runs an Accessibility Service that overlays invisible touch areas on the screen edges to capture gestures (Back, Home, Recents) and execute them seamlessly.",
                         color = textSecondary,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -708,18 +712,6 @@ fun ColorCustomizationCard(
     selectedColorInt: Int,
     onColorSelected: (Int) -> Unit
 ) {
-    val presets = remember {
-        listOf(
-            "#B06650A4", // Classic Purple
-            "#B03B82F6", // Indigo Blue
-            "#B006B6D4", // Electric Cyan
-            "#B010B981", // Glowing Teal
-            "#B0F59E0B", // Amber Orange
-            "#B0EF4444", // Crimson Red
-            "#B0EC4899"  // Hot Pink
-        ).map { android.graphics.Color.parseColor(it) }
-    }
-
     Card(
         colors = CardDefaults.cardColors(containerColor = cardBackground),
         shape = RoundedCornerShape(24.dp),
@@ -737,40 +729,66 @@ fun ColorCustomizationCard(
             )
             
             Text(
-                text = "Choose the accent color displayed during the edge swipe animations.",
+                text = "Drag or tap on the rainbow slider below to customize the color of your edge swipe animations.",
                 fontSize = 12.sp,
                 color = textSecondary
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            val hsv = remember(selectedColorInt) {
+                FloatArray(3).apply {
+                    android.graphics.Color.colorToHSV(selectedColorInt, this)
+                }
+            }
+            val currentHue = hsv[0]
+            
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
             ) {
-                presets.forEach { colorInt ->
-                    val isSelected = colorInt == selectedColorInt
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(colorInt))
-                            .border(
-                                width = if (isSelected) 3.dp else 1.dp,
-                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
-                                shape = CircleShape
-                            )
-                            .clickable { onColorSelected(colorInt) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSelected) {
-                            Text(
-                                text = "✓",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                val widthPx = constraints.maxWidth.toFloat()
+                
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures { offset ->
+                                val fraction = (offset.x / widthPx).coerceIn(0f, 1f)
+                                val newHue = fraction * 360f
+                                val color = android.graphics.Color.HSVToColor(176, floatArrayOf(newHue, 0.95f, 0.95f))
+                                onColorSelected(color)
+                            }
                         }
-                    }
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures { change, _ ->
+                                val fraction = (change.position.x / widthPx).coerceIn(0f, 1f)
+                                val newHue = fraction * 360f
+                                val color = android.graphics.Color.HSVToColor(176, floatArrayOf(newHue, 0.95f, 0.95f))
+                                onColorSelected(color)
+                            }
+                        }
+                ) {
+                    val colors = listOf(
+                        Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red
+                    )
+                    drawRect(
+                        brush = Brush.horizontalGradient(colors),
+                        size = size
+                    )
+                    
+                    val thumbX = (currentHue / 360f) * size.width
+                    drawCircle(
+                        color = Color.White,
+                        radius = 8.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(thumbX, size.height / 2f)
+                    )
+                    drawCircle(
+                        color = Color(selectedColorInt),
+                        radius = 5.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(thumbX, size.height / 2f),
+                        style = androidx.compose.ui.graphics.drawscope.Fill
+                    )
                 }
             }
         }
