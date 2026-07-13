@@ -110,6 +110,14 @@ class GestureOverlayView(
         setWillNotDraw(false)
     }
 
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        holdHandler.removeCallbacksAndMessages(null)
+        thresholdAnimator?.cancel()
+        arrowBounceAnimator?.cancel()
+        holdAnimator?.cancel()
+    }
+
     private fun triggerHapticFeedback() {
         if (!hapticsEnabled || vibrator == null) return
         try {
